@@ -1,0 +1,31 @@
+{
+  "name": "ai-search-backend",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "services/*"
+  ],
+  "scripts": {
+    "start:all": "concurrently \"npm run start:gateway\" \"npm run start:auth\" \"npm run start:catalog\" \"npm run start:search\" \"npm run start:analytics\" \"npm run start:files\"",
+    "dev:all": "concurrently \"npm run dev:gateway\" \"npm run dev:auth\" \"npm run dev:catalog\" \"npm run dev:search\" \"npm run dev:analytics\" \"npm run dev:files\"",
+    "start:gateway": "cd services/gateway && npm start",
+    "dev:gateway": "cd services/gateway && npm run dev",
+    "start:auth": "cd services/auth-service && npm start",
+    "dev:auth": "cd services/auth-service && npm run dev",
+    "start:catalog": "cd services/catalog-service && npm start",
+    "dev:catalog": "cd services/catalog-service && npm run dev",
+    "start:search": "cd services/search-service && npm start",
+    "dev:search": "cd services/search-service && npm run dev",
+    "start:analytics": "cd services/analytics-service && npm start",
+    "dev:analytics": "cd services/analytics-service && npm run dev",
+    "start:files": "cd services/file-upload-service && npm start",
+    "dev:files": "cd services/file-upload-service && npm run dev",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

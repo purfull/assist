@@ -1,0 +1,12 @@
+{
+    "name": "@ai-search/shared-auth",
+    "version": "1.0.0",
+    "description": "Centralized JWT authentication middleware for all ai-search microservices",
+    "main": "index.js",
+    "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "dependencies": {
+        "jsonwebtoken": "^9.0.2"
+    }
+}
