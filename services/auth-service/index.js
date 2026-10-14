@@ -1,78 +1,51 @@
 require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
-const cookieParser = require('cookie-parser');
-const passport = require('./src/config/passport');
-const { connectDB } = require('./src/config/database');
-const redis = require('./src/config/redis');
-const authRoutes = require('./src/routes/authRoutes');
-const paymentRoutes = require('./src/routes/paymentRoutes');
-const ticketRoutes = require('./src/routes/ticketRoutes');
-const { generalLimiter } = require('./src/middleware/rateLimiter');
+const path = require('path');
+const logger = require('./src/shared/logger');
+const { validateEnv } = require('./src/shared/config/env');
 
-const app = express();
-const PORT = process.env.PORT || 5001;
+// Validate configuration before loading anything that reads it (keys, OAuth, Razorpay)
+let config;
+try {
+    config = validateEnv();
+} catch (err) {
+    logger.fatal(err.message);
+    process.exit(1);
+}
 
-// Middleware
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(cookieParser());
-const allowedOrigins = (process.env.ALLOWED_ORIGINS || process.env.FRONTEND_URL || 'http://localhost:3000').split(',').map(origin => origin.trim());
+const { Sequelize } = require('sequelize');
+const platform = require('@ai-search/platform');
+const { sequelize, connectDB } = require('./src/shared/config/database');
+const redis = require('./src/shared/config/redis');
+const events = require('./src/shared/events');
+const { createApp } = require('./src/app');
 
-app.use(cors({
-    origin: allowedOrigins,
-    credentials: true,
-  allowedHeaders: ["Content-Type", "Authorization"],
-}));
-app.use(generalLimiter);
+const start = async () => {
+    await connectDB();
+    await redis.ping();
 
-// Passport initialization
-app.use(passport.initialize());
-
-// Health check
-app.get('/health', (req, res) => res.json({
-    service: 'Auth Service',
-    status: 'active',
-    timestamp: new Date().toISOString()
-}));
-
-// Routes
-app.use('/auth', authRoutes);
-app.use('/auth/payment', paymentRoutes);
-app.use('/tickets', ticketRoutes);
-
-// 404 handler
-app.use((req, res) => {
-    res.status(404).json({ error: 'Route not found' });
-});
-
-// Error handler
-app.use((err, req, res, next) => {
-    console.error('Error:', err);
-    res.status(err.status || 500).json({
-        error: err.message || 'Internal server error'
-    });
-});
-
-// Start server
-const startServer = async () => {
-    try {
-        // Connect to database
-        await connectDB();
-
-        // Test Redis connection
-        await redis.ping();
-
-        // Start listening
-        app.listen(PORT, () => {
-            console.log(`\n✓ Auth Service running on port ${PORT}`);
-            console.log(`✓ Environment: ${process.env.NODE_ENV || 'development'}`);
-            console.log(`✓ Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:3000'}\n`);
+    if (config.MIGRATE_ON_START) {
+        await platform.migrateUp({
+            sequelize,
+            Sequelize,
+            dir: path.join(__dirname, 'migrations'),
+            tableName: 'migrations_auth',
+            logger,
         });
-    } catch (error) {
-        console.error('Failed to start server:', error);
-        process.exit(1);
     }
+
+    platform.startServer({
+        app: createApp(),
+        port: config.PORT,
+        logger,
+        onShutdown: [
+            () => events.close(),
+            () => redis.quit(),
+            () => sequelize.close(),
+        ],
+    });
 };
 
-startServer();
+start().catch((err) => {
+    logger.fatal({ err }, 'Failed to start auth-service');
+    process.exit(1);
+});
