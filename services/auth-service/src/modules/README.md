@@ -12,16 +12,16 @@ services: the code is separated now, while the database, routes and deployment a
 | `agents` | agents, API keys, usage logs — **not mounted**; written by another codebase | `agents`, `agent_logs` | — |
 
 `src/shared/` holds infrastructure only: DB/Redis/mailer config, rate limiting, the
-internal-token middleware and the event bus (`shared/events.js`).
+internal-token middleware and the event bus (`shared/events.ts`).
 
 ## Rules
 
-1. **Import other modules only through their `index.js`.** `require('../billing')` is fine;
-   `require('../billing/models/Transaction')` is not.
+1. **Import other modules only through their `index.ts`.** `import { getBalance } from '../billing'`
+   is fine; `import Transaction from '../billing/models/Transaction'` is not.
 2. **`shared/` never imports a module.**
-3. **Each table has one writer.** Only `billing/credits.js` writes `users.credits`; identity may read it.
+3. **Each table has one writer.** Only `billing/credits.ts` writes `users.credits`; identity may read it.
 4. **Prefer events over calls** for side effects in another module. Publish with
-   `shared/events.js`; channel names there are a cross-service contract (`credit:update`
+   `shared/events.ts` (payload types in `EventPayloads`); channel names there are a cross-service contract (`credit:update`
    is also published by other services).
 5. **Refer to another module's rows by id**, not Sequelize associations across modules.
 

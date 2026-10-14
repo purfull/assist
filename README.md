@@ -1,7 +1,7 @@
 # AI Search Backend
 
-Backend for the AI Search platform: Node.js services in an npm-workspaces monorepo,
-behind a single API gateway.
+Backend for the AI Search platform: TypeScript (strict) Node.js services in an
+npm-workspaces monorepo, behind a single API gateway.
 
 ```
                    ┌──────────────┐
@@ -57,6 +57,7 @@ Migrations run on startup. Only the gateway is published to the host.
 
 ```bash
 npm install
+npm run build
 npm run keys:generate
 cp services/gateway/.env.example services/gateway/.env
 cp services/auth-service/.env.example services/auth-service/.env
@@ -73,12 +74,14 @@ invalid setting. Each `.env.example` documents its variables.
 
 | Command | What it does |
 |---|---|
-| `npm test` | Unit tests for every package (no database needed) |
+| `npm run build` | Compile every package to `dist/` (`tsc -b`, shared packages first) |
+| `npm run typecheck` | Build plus type-check of tests and scripts |
+| `npm test` | Build, then unit tests for every package (no database needed) |
 | `npm run test:integration` | Integration tests against real MySQL + Redis (see below) |
-| `npm run lint` | ESLint plus the auth-service module-boundary check |
+| `npm run lint` | Type-aware ESLint (typescript-eslint) plus the auth-service module-boundary check |
 | `npm run migrate` | Apply pending migrations for both services |
 | `npm run keys:generate` | Create development JWT keys (`-- --force` replaces them) |
-| `npm run dev:all` / `start:all` | Run all three services (nodemon / node) |
+| `npm run dev:all` / `start:all` | Run all three services (`tsx watch` on source / `node dist/index.js`) |
 
 ### Integration tests
 
@@ -94,7 +97,7 @@ DB_PORT=3307 DB_PASSWORD=root REDIS_PORT=6380 npm run test:integration
 
 ### Database changes
 
-Schema changes are Umzug migrations in `services/<service>/migrations/`, one bookkeeping
+Schema changes are TypeScript Umzug migrations in `services/<service>/src/migrations/`, one bookkeeping
 table per service (`migrations_auth`, `migrations_files`). Never use `sequelize.sync()`.
 Migrations must be safe to run on databases created by the old `sync()` code (check
 before creating or altering). `npm run migrate -w services/auth-service -- pending` lists
@@ -102,24 +105,28 @@ what would run.
 
 ### CI
 
-`.github/workflows/ci.yml` runs on every push to `main` and every pull request: lint and
-unit tests (Node 20 and 22), integration tests against MySQL and Redis, a production
+`.github/workflows/ci.yml` runs on every push to `main` and every pull request: type-check,
+lint and unit tests (Node 20 and 22), integration tests against MySQL and Redis, a production
 dependency audit (fails on critical), a secret scan and Docker image builds.
 
 ## Repository layout
 
 ```
 .github/workflows/ci.yml     CI pipeline
-Dockerfile                   One image for any service: --build-arg SERVICE=<dir>
+Dockerfile                   One image for any service: --build-arg SERVICE=<dir> (compiles, ships dist/)
 docker-compose.yml           Full local stack
-eslint.config.js             Lint rules for the whole repo
-scripts/generate-keys.js     Development JWT key pair → services/keys/
+tsconfig.base.json           Strict compiler options shared by every package
+tsconfig.json                Solution file: tsc -b builds all packages in dependency order
+eslint.config.js             Type-aware lint rules for the whole repo
+scripts/generate-keys.ts     Development JWT key pair → services/keys/
 services/
-  gateway/                   src/app.js (createApp), src/config.js, test/
-  auth-service/              src/app.js, src/modules/<context>/, src/shared/, migrations/, test/
-  file-upload-service/       src/app.js, src/controllers, src/config, migrations/, test/
-  platform/                  shared runtime library (+ migrations.js)
-  shared-auth/               JWT verification middleware
+  gateway/                   src/app.ts (createApp), src/config.ts, src/index.ts, test/
+  auth-service/              src/app.ts, src/modules/<context>/, src/shared/, src/migrations/, test/
+  file-upload-service/       src/app.ts, src/controllers, src/config, src/migrations/, test/
+  platform/                  shared runtime library (src/ → dist/)
+  shared-auth/               JWT verification middleware (src/ → dist/)
+
+Each package: src/ (compiled to dist/), test/ (own tsconfig, run with tsx), tsconfig.json.
   keys/                      development keys (git-ignored)
 ```
 

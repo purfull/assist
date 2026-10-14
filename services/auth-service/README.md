@@ -12,11 +12,14 @@ are handled by the gateway.
 ```bash
 cp .env.example .env              # then fill in values
 npm run keys:generate             # from the repo root: dev JWT keys in services/keys/
-npm run migrate                   # or set MIGRATE_ON_START=true
-npm run dev
+npm run build                     # from the repo root: compiles shared packages + services
+npm run migrate:dev               # migrations from source (or set MIGRATE_ON_START=true)
+npm run dev                       # tsx watch src/index.ts
 ```
 
-Configuration is validated at startup (`src/shared/config/env.js`); missing or invalid
+Production runs the compiled output: `npm run build && npm start` (`node dist/index.js`).
+
+Configuration is validated at startup (`src/shared/config/env.ts`, imported first via `src/shared/config/validated.ts`); missing or invalid
 settings stop the service with a message naming them.
 
 ## Endpoints (through the gateway)
@@ -41,19 +44,22 @@ Other services verify tokens with `@ai-search/shared-auth`, ideally via `JWT_JWK
 
 ## Database
 
-Schema changes are migrations in `migrations/` (Umzug, bookkeeping table
-`migrations_auth`). Never use `sequelize.sync()`.
+Schema changes are TypeScript migrations in `src/migrations/` (Umzug, bookkeeping table
+`migrations_auth`, names recorded as `.js` whether run from source or `dist/`).
+Never use `sequelize.sync()`.
 
 ```bash
-npm run migrate                   # apply pending
+npm run migrate                   # apply pending (compiled: node dist/scripts/migrate.js)
 npm run migrate -- pending        # list pending
 npm run migrate -- down           # revert the last one
+npm run migrate:dev -- pending    # same, from source via tsx
 ```
 
 ## Tests
 
 ```bash
-npm test                          # unit tests, no database needed
+npm test                          # unit tests via tsx, no database needed (build shared packages first)
+npm run typecheck                 # type-check tests and scripts
 INTEGRATION=1 npm run test:integration   # needs MySQL + Redis; DROPS the DB_NAME database
 npm run lint:boundaries           # module import rules
 ```
