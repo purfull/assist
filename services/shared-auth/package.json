@@ -4,7 +4,7 @@
     "description": "Centralized JWT authentication middleware for all ai-search microservices",
     "main": "index.js",
     "scripts": {
-        "test": "echo \"Error: no test specified\" && exit 1"
+        "test": "NODE_ENV=test node --test test/*.test.js"
     },
     "dependencies": {
         "jsonwebtoken": "^9.0.2"
