@@ -3,6 +3,9 @@
 const fs = require('fs');
 const path = require('path');
 const FileRecord = require('../models/FileRecord');
+const { matchesDeclaredType } = require('../utils/fileSignature');
+const { sequelize } = require('../config/database');
+const logger = require('../shared/logger');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -24,10 +27,16 @@ const unlinkSilent = (absolutePath) => {
         fs.unlinkSync(absolutePath);
     } catch (err) {
         if (err.code !== 'ENOENT') {
-            console.error(`[file-controller] Failed to delete file at ${absolutePath}:`, err.message);
+            logger.error({ err, path: absolutePath }, 'Failed to delete file');
         }
     }
 };
+
+/**
+ * Remove files multer already wrote to disk for a request that is being rejected.
+ * @param {Array<{ path: string }>} files
+ */
+const removeUploaded = (files = []) => files.forEach((file) => unlinkSilent(file.path));
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Controllers
@@ -46,31 +55,41 @@ const uploadFiles = async (req, res) => {
             return res.status(400).json({ error: 'No files were uploaded' });
         }
 
-        const baseUploadDir = path.resolve(process.env.UPLOAD_DIR || 'uploads');
+        const mismatched = req.files.find((file) => !matchesDeclaredType(file.path, file.mimetype));
+        if (mismatched) {
+            removeUploaded(req.files);
+            return res.status(415).json({
+                error: `File "${mismatched.originalname}" does not match its declared type ${mismatched.mimetype}`,
+            });
+        }
 
-        const records = await Promise.all(
-            req.files.map((file) => {
-                // Compute relative path from project root for DB storage
-                const relativePath = path.relative(process.cwd(), file.path);
-
-                return FileRecord.create({
+        // All records are created in one transaction; if any insert fails, none are kept
+        // and the files already written to disk are removed (no orphans).
+        let records;
+        try {
+            records = await sequelize.transaction((transaction) => Promise.all(
+                req.files.map((file) => FileRecord.create({
                     originalName: file.originalname,
                     storedName: file.filename,
                     mimeType: file.mimetype,
                     size: file.size,
-                    path: relativePath,
+                    // Relative path from project root for DB storage
+                    path: path.relative(process.cwd(), file.path),
                     uploadedBy: userId,
-                });
-            })
-        );
+                }, { transaction }))
+            ));
+        } catch (error) {
+            removeUploaded(req.files);
+            throw error;
+        }
 
         return res.status(201).json({
             message: `${records.length} file(s) uploaded successfully`,
             files: records.map(formatRecord),
         });
     } catch (error) {
-        console.error('[uploadFiles]', error);
-        return res.status(500).json({ error: 'Upload failed', detail: error.message });
+        req.log.error({ err: error }, '[uploadFiles]');
+        return res.status(500).json({ error: 'Upload failed' });
     }
 };
 
@@ -81,28 +100,28 @@ const uploadFiles = async (req, res) => {
 const listFiles = async (req, res) => {
     try {
         const { userId } = req.user;
-        const { page = 1, limit = 20, mimeType } = req.query;
+        const { mimeType } = req.query;
+        const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+        const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 20, 1), 100);
 
         const where = { uploadedBy: userId };
-        if (mimeType) where.mimeType = mimeType;
-
-        const offset = (parseInt(page, 10) - 1) * parseInt(limit, 10);
+        if (typeof mimeType === 'string' && mimeType) where.mimeType = mimeType;
 
         const { count, rows } = await FileRecord.findAndCountAll({
             where,
             order: [['createdAt', 'DESC']],
-            limit: parseInt(limit, 10),
-            offset,
+            limit,
+            offset: (page - 1) * limit,
         });
 
         return res.json({
             total: count,
-            page: parseInt(page, 10),
-            limit: parseInt(limit, 10),
+            page,
+            limit,
             files: rows.map(formatRecord),
         });
     } catch (error) {
-        console.error('[listFiles]', error);
+        req.log.error({ err: error }, '[listFiles]');
         return res.status(500).json({ error: 'Failed to retrieve files' });
     }
 };
@@ -139,12 +158,12 @@ const getFile = async (req, res) => {
 
         const stream = fs.createReadStream(absolutePath);
         stream.on('error', (err) => {
-            console.error('[getFile] stream error:', err);
+            req.log.error({ err: err }, '[getFile] stream error');
             res.status(500).end();
         });
         stream.pipe(res);
     } catch (error) {
-        console.error('[getFile]', error);
+        req.log.error({ err: error }, '[getFile]');
         return res.status(500).json({ error: 'Failed to retrieve file' });
     }
 };
@@ -161,37 +180,45 @@ const updateFile = async (req, res) => {
         const { fileId } = req.params;
         const { userId } = req.user;
 
-        const record = await FileRecord.findByPk(fileId);
-        if (!record) {
-            return res.status(404).json({ error: 'File not found' });
-        }
-        if (record.uploadedBy !== userId) {
-            return res.status(403).json({ error: 'Access denied' });
-        }
         if (!req.file) {
             return res.status(400).json({ error: 'No replacement file provided' });
         }
 
-        // Delete old file from disk
-        unlinkSilent(resolveFilePath(record));
+        const record = await FileRecord.findByPk(fileId);
+        if (!record || record.uploadedBy !== userId) {
+            removeUploaded([req.file]);
+            return res.status(record ? 403 : 404).json({ error: record ? 'Access denied' : 'File not found' });
+        }
 
-        // Update record with new file metadata
-        const relativePath = path.relative(process.cwd(), req.file.path);
-        await record.update({
-            originalName: req.file.originalname,
-            storedName: req.file.filename,
-            mimeType: req.file.mimetype,
-            size: req.file.size,
-            path: relativePath,
-        });
+        if (!matchesDeclaredType(req.file.path, req.file.mimetype)) {
+            removeUploaded([req.file]);
+            return res.status(415).json({ error: `File does not match its declared type ${req.file.mimetype}` });
+        }
+
+        // Point the record at the new file first; only then delete the old one, so a failed
+        // DB update never leaves the record pointing at a deleted file.
+        const oldPath = resolveFilePath(record);
+        try {
+            await record.update({
+                originalName: req.file.originalname,
+                storedName: req.file.filename,
+                mimeType: req.file.mimetype,
+                size: req.file.size,
+                path: path.relative(process.cwd(), req.file.path),
+            });
+        } catch (error) {
+            removeUploaded([req.file]);
+            throw error;
+        }
+        unlinkSilent(oldPath);
 
         return res.json({
             message: 'File updated successfully',
             file: formatRecord(record),
         });
     } catch (error) {
-        console.error('[updateFile]', error);
-        return res.status(500).json({ error: 'File update failed', detail: error.message });
+        req.log.error({ err: error }, '[updateFile]');
+        return res.status(500).json({ error: 'File update failed' });
     }
 };
 
@@ -213,13 +240,14 @@ const deleteFile = async (req, res) => {
             return res.status(403).json({ error: 'Access denied' });
         }
 
-        // Remove from disk first, then DB
-        unlinkSilent(resolveFilePath(record));
+        // Remove the DB record first, then the file: if the delete fails the file is still served
+        const absolutePath = resolveFilePath(record);
         await record.destroy();
+        unlinkSilent(absolutePath);
 
         return res.json({ message: 'File deleted successfully', fileId });
     } catch (error) {
-        console.error('[deleteFile]', error);
+        req.log.error({ err: error }, '[deleteFile]');
         return res.status(500).json({ error: 'Failed to delete file' });
     }
 };

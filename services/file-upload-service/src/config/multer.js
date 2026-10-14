@@ -15,7 +15,7 @@ const DEFAULT_ALLOWED_MIME_TYPES = new Set([
     'image/png',
     'image/gif',
     'image/webp',
-    'image/svg+xml',
+    // image/svg+xml is deliberately excluded: SVG can carry scripts (stored XSS)
     // Documents
     'application/pdf',
     'application/msword',
@@ -61,9 +61,9 @@ const storage = multer.diskStorage({
         const userId = req.user ? String(req.user.userId) : 'anonymous';
         const userDir = path.join(baseDir, userId);
 
-        // Create the user-specific directory if it does not exist
-        fs.mkdirSync(userDir, { recursive: true });
-        cb(null, userDir);
+        // Create the user-specific directory if it does not exist. Errors must go to the
+        // callback: a throw here escapes multer's stream handling and crashes the process.
+        fs.mkdir(userDir, { recursive: true }, (err) => cb(err, userDir));
     },
 
     filename: (req, file, cb) => {

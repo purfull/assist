@@ -1,4 +1,5 @@
 const { Sequelize } = require('sequelize');
+const logger = require('../shared/logger');
 
 const sequelize = new Sequelize(
     process.env.DB_NAME,
@@ -8,7 +9,7 @@ const sequelize = new Sequelize(
         host: process.env.DB_HOST,
         port: process.env.DB_PORT || 3306,
         dialect: 'mysql',
-        logging: process.env.NODE_ENV === 'development' ? console.log : false,
+        logging: (sql) => logger.debug({ sql }, 'SQL'),
         pool: {
             max: 5,
             min: 0,
@@ -18,19 +19,13 @@ const sequelize = new Sequelize(
     }
 );
 
+/**
+ * Verify the database is reachable. Schema changes are applied by migrations
+ * (npm run migrate), never by sequelize.sync() at startup.
+ */
 const connectDB = async () => {
-    try {
-        await sequelize.authenticate();
-        console.log('✓ MySQL Database connected successfully');
-
-        if (process.env.NODE_ENV === 'development') {
-            await sequelize.sync({ alter: false });
-            console.log('✓ Database models synchronized');
-        }
-    } catch (error) {
-        console.error('✗ Unable to connect to database:', error.message);
-        process.exit(1);
-    }
+    await sequelize.authenticate();
+    logger.info('MySQL connected');
 };
 
 module.exports = { sequelize, connectDB };
