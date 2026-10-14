@@ -1,0 +1,10 @@
+.git
+**/node_modules
+**/.env
+**/.env.*
+!**/.env.example
+**/uploads
+services/keys
+**/coverage
+**/test
+*.md

@@ -6,26 +6,33 @@
     "services/*"
   ],
   "scripts": {
-    "start:all": "concurrently \"npm run start:gateway\" \"npm run start:auth\" \"npm run start:catalog\" \"npm run start:search\" \"npm run start:analytics\" \"npm run start:files\"",
-    "dev:all": "concurrently \"npm run dev:gateway\" \"npm run dev:auth\" \"npm run dev:catalog\" \"npm run dev:search\" \"npm run dev:analytics\" \"npm run dev:files\"",
-    "start:gateway": "cd services/gateway && npm start",
-    "dev:gateway": "cd services/gateway && npm run dev",
-    "start:auth": "cd services/auth-service && npm start",
-    "dev:auth": "cd services/auth-service && npm run dev",
-    "start:catalog": "cd services/catalog-service && npm start",
-    "dev:catalog": "cd services/catalog-service && npm run dev",
-    "start:search": "cd services/search-service && npm start",
-    "dev:search": "cd services/search-service && npm run dev",
-    "start:analytics": "cd services/analytics-service && npm start",
-    "dev:analytics": "cd services/analytics-service && npm run dev",
-    "start:files": "cd services/file-upload-service && npm start",
-    "dev:files": "cd services/file-upload-service && npm run dev",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start:all": "concurrently -n gateway,auth,files \"npm start -w services/gateway\" \"npm start -w services/auth-service\" \"npm start -w services/file-upload-service\"",
+    "dev:all": "concurrently -n gateway,auth,files \"npm run dev -w services/gateway\" \"npm run dev -w services/auth-service\" \"npm run dev -w services/file-upload-service\"",
+    "start:gateway": "npm start -w services/gateway",
+    "dev:gateway": "npm run dev -w services/gateway",
+    "start:auth": "npm start -w services/auth-service",
+    "dev:auth": "npm run dev -w services/auth-service",
+    "start:files": "npm start -w services/file-upload-service",
+    "dev:files": "npm run dev -w services/file-upload-service",
+    "keys:generate": "node scripts/generate-keys.js",
+    "migrate": "npm run migrate -w services/auth-service && npm run migrate -w services/file-upload-service",
+    "lint": "eslint . && npm run lint:boundaries -w services/auth-service",
+    "test": "npm test --workspaces --if-present",
+    "test:integration": "INTEGRATION=1 npm run test:integration -w services/auth-service && INTEGRATION=1 npm run test:integration -w services/file-upload-service",
+    "docker:up": "npm run keys:generate && docker compose up --build",
+    "docker:down": "docker compose down"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "concurrently": "^9.2.1"
+    "@eslint/js": "^9.39.5",
+    "concurrently": "^9.2.1",
+    "eslint": "^9.39.5",
+    "globals": "^15.15.0",
+    "supertest": "^7.3.1"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }
