@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   lint-and-unit:
-    name: Lint & unit tests (Node ${{ matrix.node }})
+    name: Type-check, lint & unit tests (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -26,8 +26,11 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: npm
       - run: npm ci
+      - name: Type-check (sources, tests and scripts)
+        run: npm run typecheck
       - run: npm run lint
-      - run: npm test
+      - name: Unit tests
+        run: npm test
 
   integration:
     name: Integration tests (MySQL + Redis)

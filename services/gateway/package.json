@@ -1,11 +1,13 @@
 {
   "name": "@ai-search/gateway",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "dist/index.js",
   "scripts": {
-    "start": "node index.js",
-    "dev": "nodemon index.js",
-    "test": "NODE_ENV=test node --test test/*.test.js"
+    "build": "tsc -b",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "typecheck": "tsc -p test",
+    "test": "NODE_ENV=test node --import tsx --test test/*.test.ts"
   },
   "dependencies": {
     "@ai-search/platform": "*",
@@ -17,7 +19,5 @@
     "helmet": "^8.3.0",
     "http-proxy-middleware": "^2.0.6"
   },
-  "devDependencies": {
-    "nodemon": "^3.0.2"
-  }
+  "devDependencies": {}
 }

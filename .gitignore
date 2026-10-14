@@ -5,3 +5,7 @@ node_modules
 services/keys/
 *.pem
 **/uploads/
+
+# Build output
+dist/
+*.tsbuildinfo

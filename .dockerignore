@@ -1,5 +1,7 @@
 .git
 **/node_modules
+**/dist
+**/*.tsbuildinfo
 **/.env
 **/.env.*
 !**/.env.example
@@ -7,4 +9,5 @@
 services/keys
 **/coverage
 **/test
+**/scripts/check-boundaries.ts
 *.md
