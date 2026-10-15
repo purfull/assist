@@ -5,6 +5,7 @@
  */
 import '../helpers/env';
 import '../helpers/useStubRedis';
+import '../helpers/fakeRazorpay';
 import crypto from 'crypto';
 import { test, before } from 'node:test';
 import assert from 'node:assert/strict';

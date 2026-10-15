@@ -44,15 +44,16 @@ export const createMigrator = ({ sequelize, dir, tableName, logger }: MigratorOp
     new Umzug<MigrationContext>({
         migrations: {
             glob: ['*.{js,ts}', { cwd: dir, ignore: ['*.d.ts'] }],
-            resolve: ({ name, path: filePath, context }): RunnableMigration<MigrationContext> => {
+            resolve: ({ name, path: filePath }): RunnableMigration<MigrationContext> => {
                 if (!filePath) throw new Error(`Migration ${name} has no path`);
                 // Loaded on demand by path (.js in dist, .ts under tsx), so a dynamic require is intended
                 // eslint-disable-next-line @typescript-eslint/no-require-imports
                 const load = (): MigrationModule => require(path.resolve(filePath)) as MigrationModule;
                 return {
                     name: normaliseName(name),
-                    up: async () => load().up({ context }),
-                    down: async () => load().down({ context }),
+                    // Umzug passes the context when it runs the migration
+                    up: async ({ context }) => load().up({ context }),
+                    down: async ({ context }) => load().down({ context }),
                 };
             },
         },

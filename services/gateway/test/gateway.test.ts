@@ -85,3 +85,39 @@ test('unknown routes get a JSON 404', async () => {
 test('invalid configuration fails fast', () => {
     assert.throws(() => loadConfig({ NODE_ENV: 'production' }), /AUTH_SERVICE_URL/);
 });
+
+test('a slow upstream gets a JSON 504 after PROXY_TIMEOUT_MS', async () => {
+    const slow = http.createServer(() => { /* never responds */ });
+    await new Promise<void>((resolve) => slow.listen(0, '127.0.0.1', resolve));
+    try {
+        const config = loadConfig({
+            NODE_ENV: 'test',
+            AUTH_SERVICE_URL: `http://127.0.0.1:${(slow.address() as AddressInfo).port}`,
+            FILE_UPLOAD_SERVICE_URL: 'http://127.0.0.1:1',
+            ALLOWED_ORIGINS: 'http://app.example',
+            PROXY_TIMEOUT_MS: '200',
+        });
+        const res = await request(createApp(config, platform.createLogger('gateway-test'))).get('/auth/me');
+        assert.equal(res.status, 504);
+        assert.deepEqual(res.body, { error: 'Service temporarily unavailable' });
+    } finally {
+        slow.closeAllConnections();
+        slow.close();
+    }
+});
+
+test('the edge rate limit returns 429 but never limits health checks', async () => {
+    const config = loadConfig({
+        NODE_ENV: 'test',
+        AUTH_SERVICE_URL: 'http://127.0.0.1:1',
+        FILE_UPLOAD_SERVICE_URL: 'http://127.0.0.1:1',
+        ALLOWED_ORIGINS: 'http://app.example',
+        RATE_LIMIT_PER_MINUTE: '2',
+    });
+    const limited = createApp(config, platform.createLogger('gateway-test'));
+    await request(limited).get('/nope');
+    await request(limited).get('/nope');
+    const third = await request(limited).get('/nope');
+    assert.equal(third.status, 429);
+    assert.equal((await request(limited).get('/health')).status, 200);
+});

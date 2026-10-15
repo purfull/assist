@@ -77,6 +77,7 @@ invalid setting. Each `.env.example` documents its variables.
 | `npm run build` | Compile every package to `dist/` (`tsc -b`, shared packages first) |
 | `npm run typecheck` | Build plus type-check of tests and scripts |
 | `npm test` | Build, then unit tests for every package (no database needed) |
+| `npm run test:coverage` | Unit tests with coverage; fails if a package drops below its line/branch/function thresholds |
 | `npm run test:integration` | Integration tests against real MySQL + Redis (see below) |
 | `npm run lint` | Type-aware ESLint (typescript-eslint) plus the auth-service module-boundary check |
 | `npm run migrate` | Apply pending migrations for both services |
@@ -106,7 +107,7 @@ what would run.
 ### CI
 
 `.github/workflows/ci.yml` runs on every push to `main` and every pull request: type-check,
-lint and unit tests (Node 20 and 22), integration tests against MySQL and Redis, a production
+lint and unit tests (Node 20 and 22), coverage thresholds, integration tests against MySQL and Redis, a production
 dependency audit (fails on critical), a secret scan and Docker image builds.
 
 ## Repository layout

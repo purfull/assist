@@ -21,6 +21,7 @@
     "migrate": "npm run build && npm run migrate -w services/auth-service && npm run migrate -w services/file-upload-service",
     "lint": "eslint . && npm run lint:boundaries -w services/auth-service",
     "test": "npm run build && npm test --workspaces --if-present",
+    "test:coverage": "npm run build && npm run test:coverage --workspaces --if-present",
     "test:integration": "npm run build && INTEGRATION=1 npm run test:integration -w services/auth-service && INTEGRATION=1 npm run test:integration -w services/file-upload-service",
     "docker:up": "npm run keys:generate && docker compose up --build",
     "docker:down": "docker compose down"

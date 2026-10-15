@@ -12,7 +12,8 @@
     "test": "npm run test:unit",
     "test:unit": "node --import tsx --test test/unit/*.test.ts",
     "test:integration": "node --import tsx --test --test-concurrency=1 test/integration/*.test.ts",
-    "lint:boundaries": "tsx scripts/check-boundaries.ts"
+    "lint:boundaries": "tsx scripts/check-boundaries.ts",
+    "test:coverage": "NODE_ENV=test node --import tsx --test --experimental-test-coverage --test-coverage-exclude='test/**' --test-coverage-exclude='../**' --test-coverage-lines=92 --test-coverage-branches=85 --test-coverage-functions=95 test/unit/*.test.ts"
   },
   "dependencies": {
     "@ai-search/platform": "*",

@@ -32,6 +32,18 @@ jobs:
       - name: Unit tests
         run: npm test
 
+  coverage:
+    name: Unit test coverage (fails below thresholds)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22 # coverage thresholds need Node 22.8+
+          cache: npm
+      - run: npm ci
+      - run: npm run test:coverage
+
   integration:
     name: Integration tests (MySQL + Redis)
     runs-on: ubuntu-latest

@@ -73,8 +73,9 @@ export const createApp = (config: GatewayConfig, logger: platform.Logger): Appli
             target,
             changeOrigin: true,
             xfwd: true, // X-Forwarded-For / -Proto so services see the real client
+            // Upstream timeout only. http-proxy's `timeout` option is the *client* socket
+            // timeout: it would cut the browser's connection before the 504 can be sent.
             proxyTimeout: timeout,
-            timeout,
             onError: upstreamError,
             onProxyReq: abortUpstreamOnClientClose,
             logLevel: 'silent', // failures are logged by upstreamError with the request id

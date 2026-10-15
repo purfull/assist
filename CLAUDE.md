@@ -33,6 +33,7 @@ npm run build                              # tsc -b: platform, shared-auth, then
 npm run typecheck                          # build + type-check every test/ and scripts/ project — must pass
 npm run lint                               # type-aware ESLint + auth-service module boundaries — must pass
 npm test                                   # build, then all unit tests (no DB/Redis) — must pass
+npm run test:coverage                      # unit tests + per-package coverage thresholds — must pass
 npm run test:integration                   # needs MySQL + Redis; DROPS tables in DB_NAME (see README)
 npm test -w services/auth-service          # one package (shared packages must be built first)
 node --import tsx --test --test-name-pattern="refresh" services/auth-service/test/unit/app.test.ts   # one test
@@ -46,7 +47,8 @@ from their `dist/`, so run `npm run build` after changing a shared package.
 
 ## Definition of done
 
-1. `npm run typecheck`, `npm run lint` and `npm test` pass.
+1. `npm run typecheck`, `npm run lint`, `npm test` and `npm run test:coverage` pass. Never lower a
+   coverage threshold (`test:coverage` in each package.json) to make a change pass; add tests.
 2. Behaviour changes have tests: unit tests for logic and HTTP behaviour; integration tests
    (`test/integration/`) for anything that depends on real SQL, transactions, Redis or
    column sizes. **Stubbed-DB unit tests cannot catch schema problems** — a 654-char token
@@ -144,9 +146,18 @@ from their `dist/`, so run `npm run build` after changing a shared package.
   Files: `test/unit/*.test.ts`, `test/integration/*.test.ts`. Each `test/` has its own tsconfig
   and is covered by `npm run typecheck`.
 - Setup happens through **side-effect imports, in order**, before any app import:
-  `import '../helpers/env'` (env + throwaway keys), then `import '../helpers/useStubRedis'`
-  (unit) or `'../helpers/captureMail'` (integration). Moving these below an app import breaks them.
-- Fake DB calls with `stubMethod(Model, 'findByPk', impl)` from `test/helpers/stub.ts` inside `before()`.
+  `import '../helpers/env'` (env + throwaway keys), then as needed `useStubRedis` (in-memory
+  Redis; `stubRedis.emitMessage()` simulates pub/sub), `captureMail` (read sent emails),
+  `fakeRazorpay` (set `razorpayOrders.create` per test), `fakeMailgun`. Unit tests that load
+  the app must import `fakeRazorpay` so nothing can reach the real payment API.
+- Module fakes must be **separate side-effect modules**: a `replaceModule(...)` call written in
+  the test file itself runs *after* the hoisted imports, so the real module is already loaded
+  (this once sent real Razorpay requests from a unit test).
+- Fake DB calls with `createSandbox()` from `test/helpers/stub.ts`: `sandbox.stub(Model, 'findOne', impl)`
+  returns the recorded calls; `afterEach(() => sandbox.restore())`. `fakeInstance`/`fakeUser`
+  (`test/helpers/fakes.ts`) stand in for model instances; `signInAs(sandbox, user)` makes
+  `authenticate` accept that user and returns the Authorization header.
+- Assert ownership through the query: check the recorded `where` includes `userId`, not just the status code.
 - Integration suites use `describe(..., { skip: !enabled })` and load app modules lazily
   (typed `require` in `before()`) so a skipped run opens no connections and exits cleanly.
 - Test behaviour through HTTP (`createApp()` + supertest) where possible, not internals.
@@ -162,6 +173,8 @@ from their `dist/`, so run `npm run build` after changing a shared package.
 - **http-proxy doesn't abort upstream requests when the client disconnects** (Node no
   longer emits `aborted` for completed GETs). The gateway destroys the upstream request on
   client `close` — keep that, or every closed SSE stream leaks a connection.
+- **http-proxy's `timeout` option is the client socket timeout**, not the upstream one.
+  Use only `proxyTimeout`, or a slow service cuts the browser's connection instead of returning 504.
 - **Docker named volumes** keep the ownership they were created with. If you change a
   directory's owner in the Dockerfile, existing volumes need recreating.
 - **Docker build on this machine uses the legacy builder**; a failed `COPY` prints only

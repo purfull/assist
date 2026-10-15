@@ -12,7 +12,8 @@
   "scripts": {
     "build": "tsc -b",
     "typecheck": "tsc -p test",
-    "test": "NODE_ENV=test node --import tsx --test test/*.test.ts"
+    "test": "NODE_ENV=test node --import tsx --test test/*.test.ts",
+    "test:coverage": "NODE_ENV=test node --import tsx --test --experimental-test-coverage --test-coverage-exclude='test/**' --test-coverage-exclude='../**' --test-coverage-lines=84 --test-coverage-branches=84 --test-coverage-functions=82 test/*.test.ts"
   },
   "types": "dist/index.d.ts",
   "files": [

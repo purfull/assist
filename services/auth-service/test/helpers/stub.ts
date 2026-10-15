@@ -11,6 +11,34 @@ export const stubMethod = <T extends object>(target: T, key: keyof T & string, i
     };
 };
 
+/** A recorded call to a fake. */
+export type Calls = unknown[][];
+
+/**
+ * Groups stubs so a test file can restore them all in afterEach:
+ *
+ *   const sandbox = createSandbox();
+ *   afterEach(() => sandbox.restore());
+ *   const calls = sandbox.stub(User, 'findOne', async () => null);
+ */
+export const createSandbox = () => {
+    const restorers: Array<() => void> = [];
+    return {
+        /** Replace target[key] with impl; returns the list of argument arrays it was called with. */
+        stub<T extends object>(target: T, key: keyof T & string, impl: (...args: never[]) => unknown): Calls {
+            const calls: Calls = [];
+            restorers.push(stubMethod(target, key, (...args: never[]) => {
+                calls.push(args);
+                return impl(...args);
+            }));
+            return calls;
+        },
+        restore(): void {
+            while (restorers.length) restorers.pop()?.();
+        },
+    };
+};
+
 /**
  * Put a fake module into the require cache so code that imports `modulePath` gets
  * `exports` instead. Must run before anything imports that module.

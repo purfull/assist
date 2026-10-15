@@ -2,6 +2,7 @@
  * In-memory stand-in for the ioredis client, for unit tests that must not need Redis.
  * Covers the commands the service uses, plus the rate-limit-redis script calls.
  */
+import { EventEmitter } from 'events';
 import path from 'path';
 import { replaceModule } from './stub';
 
@@ -26,7 +27,27 @@ export const createStubRedis = () => {
         status: 'ready',
         disconnect() { /* no-op */ },
         on() { return stub; },
-        duplicate() { return { on() { return this; }, subscribe: async () => 1, quit: async () => 'OK' }; },
+        /** Pub/sub connections; tests emit 'message' on them to simulate published events. */
+        subscribers: [] as EventEmitter[],
+        duplicate() {
+            const sub = Object.assign(new EventEmitter(), {
+                status: 'ready',
+                subscribe: async () => 1,
+                quit: async () => 'OK',
+                disconnect() { /* no-op */ },
+            });
+            stub.subscribers.push(sub);
+            return sub;
+        },
+        /** Forget rate-limit counters (call in beforeEach when a file makes many requests). */
+        resetRateLimits() {
+            hits.clear();
+        },
+        /** Deliver a pub/sub message to every subscriber connection. */
+
+        emitMessage(channel: string, payload: unknown) {
+            stub.subscribers.forEach((sub) => sub.emit('message', channel, JSON.stringify(payload)));
+        },
         multi() {
             const ops: Array<[string, unknown[]]> = [];
             const chain: Record<string, unknown> = new Proxy({}, {

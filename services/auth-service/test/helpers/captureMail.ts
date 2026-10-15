@@ -1,6 +1,6 @@
 /**
- * Side-effect import for integration tests: captures outgoing email instead of sending
- * it, so tests can read OTPs and reset links. Import before any app code.
+ * Side-effect import: captures outgoing email instead of sending it, so tests can read
+ * OTPs and reset links. Import before any app code (unit and integration tests).
  */
 import path from 'path';
 import { replaceModule } from './stub';
