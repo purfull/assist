@@ -1,2 +1,11 @@
 .env
 node_modules
+
+# Secrets and user data must never be committed
+services/keys/
+*.pem
+**/uploads/
+
+# Build output
+dist/
+*.tsbuildinfo

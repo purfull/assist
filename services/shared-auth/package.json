@@ -1,12 +1,19 @@
 {
-    "name": "@ai-search/shared-auth",
-    "version": "1.0.0",
-    "description": "Centralized JWT authentication middleware for all ai-search microservices",
-    "main": "index.js",
-    "scripts": {
-        "test": "echo \"Error: no test specified\" && exit 1"
-    },
-    "dependencies": {
-        "jsonwebtoken": "^9.0.2"
-    }
+  "name": "@ai-search/shared-auth",
+  "version": "1.0.0",
+  "description": "Centralized JWT authentication middleware for all ai-search microservices",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -p test",
+    "test": "NODE_ENV=test node --import tsx --test test/*.test.ts",
+    "test:coverage": "NODE_ENV=test node --import tsx --test --experimental-test-coverage --test-coverage-exclude='test/**' --test-coverage-exclude='../**' --test-coverage-lines=95 --test-coverage-branches=78 --test-coverage-functions=97 test/*.test.ts"
+  },
+  "dependencies": {
+    "jsonwebtoken": "^9.0.2"
+  },
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ]
 }

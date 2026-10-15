@@ -1,0 +1,108 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-and-unit:
+    name: Type-check, lint & unit tests (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [20, 22]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - name: Type-check (sources, tests and scripts)
+        run: npm run typecheck
+      - run: npm run lint
+      - name: Unit tests
+        run: npm test
+
+  coverage:
+    name: Unit test coverage (fails below thresholds)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22 # coverage thresholds need Node 22.8+
+          cache: npm
+      - run: npm ci
+      - run: npm run test:coverage
+
+  integration:
+    name: Integration tests (MySQL + Redis)
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: ai_search_test
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -proot"
+          --health-interval 5s --health-timeout 3s --health-retries 30
+      redis:
+        image: redis:7.4-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: "3306"
+      DB_USER: root
+      DB_PASSWORD: root
+      DB_NAME: ai_search_test
+      REDIS_HOST: 127.0.0.1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:integration
+
+  security:
+    name: Dependency audit & secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Fail on critical vulnerabilities in production dependencies
+        run: npm audit --omit=dev --audit-level=critical
+      - name: Report high vulnerabilities (non-blocking)
+        run: npm audit --omit=dev --audit-level=high || echo "::warning::High-severity advisories found; see log"
+      - name: Scan the working tree for secrets
+        # Scans current files only. Switch to a full history scan (`gitleaks git`) once the
+        # previously committed JWT private key has been purged from history.
+        run: docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.21.2 dir /repo --redact -v
+
+  docker:
+    name: Build image (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [gateway, auth-service, file-upload-service]
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build --build-arg SERVICE=${{ matrix.service }} -t ai-search/${{ matrix.service }}:ci .

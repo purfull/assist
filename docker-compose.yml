@@ -1,0 +1,108 @@
+# Local full stack: MySQL, Redis, auth-service, file-upload-service and the gateway.
+#   npm run docker:up        (generates dev JWT keys first, then builds and starts)
+# Only the gateway is published to the host, matching production: services are internal.
+# All secrets below are throwaway development values.
+
+x-db-env: &db-env
+  DB_HOST: mysql
+  DB_PORT: "3306"
+  DB_NAME: ai_search_db
+  DB_USER: ai_search
+  DB_PASSWORD: ai_search_dev_password
+
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: ai_search_db
+      MYSQL_USER: ai_search
+      MYSQL_PASSWORD: ai_search_dev_password
+      MYSQL_ROOT_PASSWORD: root_dev_password
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-proot_dev_password"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  redis:
+    image: redis:7.4-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  auth-service:
+    build:
+      context: .
+      args:
+        SERVICE: auth-service
+    environment:
+      <<: *db-env
+      PORT: "5001"
+      MIGRATE_ON_START: "true"
+      REDIS_HOST: redis
+      JWT_PRIVATE_KEY_PATH: /run/keys/private.pem
+      JWT_PUBLIC_KEY_PATH: /run/keys/public.pem
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      # Development mode so emails are logged, not sent. Read OTPs with:
+      #   docker compose exec redis redis-cli get otp:<email>
+      NODE_ENV: development
+      MAIL_TRANSPORT: log
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-dev-google-client-id}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-dev-google-client-secret}
+      GOOGLE_CALLBACK_URL: http://localhost:${GATEWAY_HOST_PORT:-5000}/auth/google/callback
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:-rzp_test_dev}
+      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:-rzp_test_dev_secret}
+      INTERNAL_SERVICE_TOKEN: dev-internal-service-token-change-me-0123456789
+    volumes:
+      - ./services/keys:/run/keys:ro
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  file-upload-service:
+    build:
+      context: .
+      args:
+        SERVICE: file-upload-service
+    environment:
+      <<: *db-env
+      PORT: "5005"
+      MIGRATE_ON_START: "true"
+      JWT_JWKS_URL: http://auth-service:5001/auth/.well-known/jwks.json
+      UPLOAD_DIR: /data/uploads
+    volumes:
+      - uploads:/data/uploads
+    depends_on:
+      mysql:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+
+  gateway:
+    build:
+      context: .
+      args:
+        SERVICE: gateway
+    environment:
+      PORT: "5000"
+      AUTH_SERVICE_URL: http://auth-service:5001
+      FILE_UPLOAD_SERVICE_URL: http://file-upload-service:5005
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:3001,http://localhost:5173}
+    ports:
+      # macOS: AirPlay Receiver already listens on 5000; use e.g. GATEWAY_HOST_PORT=5050
+      - "${GATEWAY_HOST_PORT:-5000}:5000"
+    depends_on:
+      auth-service:
+        condition: service_healthy
+      file-upload-service:
+        condition: service_healthy
+
+volumes:
+  mysql-data:
+  uploads:

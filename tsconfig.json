@@ -1,0 +1,10 @@
+{
+  "files": [],
+  "references": [
+    { "path": "services/platform" },
+    { "path": "services/shared-auth" },
+    { "path": "services/gateway" },
+    { "path": "services/auth-service" },
+    { "path": "services/file-upload-service" }
+  ]
+}
